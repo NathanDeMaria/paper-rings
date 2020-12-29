@@ -1,0 +1,111 @@
+---
+title: "off_def_binomials"
+output: html_document
+---
+
+# Nfl Offense/Defense Binomials
+
+Make a MOV-predicting model out of the NFL-off/def-as-binomials model in the root of this repo.
+
+## Data
+
+Each row in this `flat_games` data frame is a game from the perspective of one side of the ball. Columns are:
+- `score`: the # of points scored by this side of the ball
+- `off`: the offensive rating (an estimate of the % of the time this offense would have a successful drive against an average defense)
+  - "Successful drive" defined by an increase in win probability by the ned
+- `def`: the defensive rating _of the team on offense_
+- `opp_off`/`opp_def`: you can figure these two out :)
+- `is_home`: 1 if this team on offense is the home team
+
+```{r read_games}
+library(tidyverse)
+
+# This is from aggregate.py in the root of this repo
+# See the root README.md for more
+games <- read_csv('../games_with_ratings.csv')
+
+home_flat <- games %>%
+  select(score = home_score,
+         off = home_off,
+         def = home_def,
+         opp_off = away_off,
+         opp_def = away_def) %>% 
+  mutate(is_home = 1)
+away_flat <- games %>%
+  select(score = away_score,
+         off = away_off,
+         def = away_def,
+         opp_off = home_off,
+         opp_def = home_def) %>% 
+  mutate(is_home = 0)
+flat_games <- bind_rows(home_flat, away_flat)
+head(flat_games)
+```
+
+## Models
+
+Try to predict the score of the game as a simple linear model.
+
+```{r simplest}
+model <- lm(score ~ off + def + is_home, data = flat_games)
+summary(model)
+```
+
+Yey, everything seems to make sense in the basic model. Even the "2.68 points for being the home team" bit lines up with what other NFL models would say. What about if we include the ratings from the inactive side of the ball?
+
+```{r inactive}
+model <- lm(score ~ off + def + opp_off + opp_def + is_home, data = flat_games)
+summary(model)
+```
+
+Interesting, seems like if you have a better defense (according to the "drive success rate" metric), you're more likely to score more points on offense (similar about your opponent's offense - the worse they are, the more points you're expected to score). Some thinking out loud here:
+- Good that your own offense and the opponents defense are both the most significant and the highest magnitude
+- Potential explanation for why the "inactive" sides of the ball matter:
+  - If you have a good defense, your offense will get a lot of short fields?
+  - The "drive success %" model doesn't totally isolate sides, so maybe a good defense success % can be caused by having a good offense somehow
+
+### More models
+
+Let's try adding some higher degree polynomials/interactions, see how it does
+
+```{r too_far}
+model <- lm(score ~ off + def + opp_off + opp_def + I(opp_def ^ 2) + I(off ^ 2) + is_home, data = flat_games)
+summary(model)
+```
+
+```{r interaction}
+model <- lm(score ~ off + def + opp_off + opp_def + off * opp_def + is_home, data = flat_games)
+summary(model)
+```
+
+Okay a bit of cheating, but here's the one that's significant with all parameters, and has the highest adjusted R-squared, so this is the one I'm going to save.
+
+```{r winner}
+model <- lm(score ~ off + def + opp_off + opp_def + I(opp_def ^ 2) + is_home, data = flat_games)
+summary(model)
+```
+
+### Model Analysis
+
+Just dumping things here I thought would be interesting to check into.
+
+Does it get more accurate as time goes on? Doesn't seem like it. I limited these to start at week 9 because I was worried about low sample size for the ratings (since they currently start each season from scratch), but maybe I could've gone earlier
+
+```{r plots}
+with_predictions <- games %>% 
+  mutate(
+    home_score_prediction = predict(model, newdata = home_flat),
+    away_score_prediction = predict(model, newdata = away_flat)
+  )
+with_predictions %>%
+  mutate(home_err = (home_score - home_score_prediction) ^ 2) %>%
+  group_by(week) %>% summarise(mse = mean(home_err)) %>%
+  ggplot() + geom_line(aes(x = week, y = mse))
+```
+
+```{r}
+with_predictions %>%
+  mutate(predicted_home_mov = home_score_prediction - away_score_prediction) %>% 
+  write_csv('nfl_off_def_binomial_pred.csv')
+```
+
