@@ -1,0 +1,63 @@
+---
+title: "drive_deltas"
+output: html_document
+---
+
+```{r}
+library(tidyverse)
+
+drive_deltas <- read_csv('../drive_deltas.csv')
+
+game_counts <- drive_deltas %>% group_by(game_id, home_team, away_team, posteam, defteam, season) %>%
+  summarise(successes = sum(posteam_drive_success, na.rm = T),
+            total = n())
+```
+
+See if there's correlations between drive success pct between seasons. Yep on offense.
+
+```{r}
+season_counts <- game_counts %>% group_by(posteam, season) %>%
+  summarise(successes = sum(successes), total = sum(total))
+season_counts <- season_counts %>% mutate(previous_season = season - 1) %>%
+  inner_join(season_counts, by = c('previous_season' = 'season', 'posteam'), suffix = c('', '_previous')) %>%
+  mutate(pct = successes / total, previous_pct = successes_previous / total_previous)
+
+model <- lm(pct ~ previous_pct, data = season_counts)
+print(summary(model)$r.squared)
+```
+
+Interesting, yes but less so on defense.
+
+```{r}
+def_season_counts <- game_counts %>% group_by(defteam, season) %>%
+  summarise(successes = sum(total) - sum(successes), total = sum(total))
+def_season_counts <- def_season_counts %>% mutate(previous_season = season - 1) %>%
+  inner_join(def_season_counts, by = c('previous_season' = 'season', 'defteam'), suffix = c('', '_previous')) %>% 
+  mutate(pct = successes / total, previous_pct = successes_previous / total_previous)
+
+def_model <- lm(pct ~ previous_pct, data = def_season_counts)
+print(summary(def_model)$r.squared)
+```
+
+## Plots
+
+Season to season by side. Thinking out loud:
+- Defense "success rate" is higher
+- Offense has a stronger (and more positive) correlation
+
+```{r}
+season_counts %>% mutate(side = 'offense') %>% 
+  bind_rows(def_season_counts %>% mutate(side = 'defense')) %>%
+  ggplot(aes(x = previous_pct, y = pct, col = side)) +
+  geom_point() +
+  geom_smooth(method = 'lm')
+```
+
+Not super relevant, just a note that offensive drive success rate is very much trending upward
+
+```{r}
+season_counts %>% group_by(season) %>%
+  summarise(successes = sum(successes), total = sum(total)) %>%
+  ggplot(aes(x = season, y = successes / total)) +
+  geom_line()
+```
