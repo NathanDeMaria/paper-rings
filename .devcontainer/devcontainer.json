@@ -1,0 +1,30 @@
+{
+	"name": "Python 3",
+	"build": {
+		"dockerfile": "Dockerfile",
+		"context": "..",
+	},
+	"settings": {
+		"terminal.integrated.shell.linux": "/bin/bash",
+		"python.pythonPath": "/usr/local/bin/python",
+		"python.linting.enabled": true,
+		"python.linting.pylintEnabled": true,
+		"python.formatting.blackPath": "/usr/local/bin/black",
+		"python.linting.mypyPath": "/usr/local/bin/mypy",
+		"python.linting.pylintPath": "/usr/local/bin/pylint",
+		"python.formatting.provider": "black"
+	},
+	"extensions": [
+		"ms-python.python",
+		"ms-python.vscode-pylance",
+	],
+	"mounts": [
+		"source=paper-rings-bashhistory,target=/commandhistory,type=volume",
+		"source=${localEnv:HOME}/.aws/config,target=/root/.aws/config,type=bind,consistency=cached,ro=1",
+		"source=${localEnv:HOME}/.aws/credentials,target=/root/.aws/credentials,type=bind,consistency=cached,ro=1",
+	],
+	"forwardPorts": [
+		8888
+	],
+	"overrideCommand": false
+}
