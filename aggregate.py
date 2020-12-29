@@ -81,8 +81,8 @@ if __name__ == "__main__":
         away_off = get_rating(Side.offense, game.season, away_team, game.week - 1)
         away_def = get_rating(Side.defense, game.season, away_team, game.week - 1)
         d = dict(
-            home_team=home_team,
-            away_team=away_team,
+            home_team=home_team.name,
+            away_team=away_team.name,
             home_off=home_off,
             away_off=away_off,
             home_def=home_def,
@@ -91,6 +91,7 @@ if __name__ == "__main__":
             home_score=game.home_score,
             away_score=game.away_score,
             week=game.week,
+            season=game.season,
         )
         ds.append(d)
     ds = pd.DataFrame(ds)
