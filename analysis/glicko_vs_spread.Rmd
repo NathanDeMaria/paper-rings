@@ -80,3 +80,30 @@ against_spread %>%
   filter(season >= train_season) %>%
   ggplot() + geom_density(aes(x = home_mov, col = beat_spread))
 ```
+
+## Absolute Error
+
+Check on the quality without the noise of the almost-toss-up spread
+
+```{r}
+against_spread %>%
+  mutate(error = home_mov - predicted_home_mov) %>% 
+  ggplot() + 
+  geom_histogram(aes(x = error))
+```
+
+```{r}
+against_spread %>%
+  mutate(abs_error = abs(home_mov - predicted_home_mov)) %>%
+  .[['abs_error']] %>%
+  mean() %>% 
+  print()
+```
+
+```{r}
+against_spread %>% 
+  mutate(spread_abs_error = abs(home_mov + spread)) %>% 
+  .[['spread_abs_error']] %>% 
+  mean() %>% 
+  print()
+```
