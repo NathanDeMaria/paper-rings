@@ -1,0 +1,63 @@
+---
+title: "binomial_vs_spread"
+output: html_document
+---
+
+```{r}
+library(tidyverse)
+
+# Umm...how did I make this NFL results csv?
+results <- read_csv('./nfl_off_def_binomial_pred.csv')
+spreads <- read_csv('../../EndGame/py-endgame/nfl_spreads.csv')
+
+# *** this model was "trained" on all games...maybe overfit
+against_spread <- results %>%
+  inner_join(spreads, by = c('home_team' = 'home', 'away_team' = 'away', 'week', 'season'))
+```
+
+
+```{r}
+against_spread <- against_spread %>%
+  mutate(residual = home_mov - predicted_home_mov) %>% 
+  # Spread is the number of points given to (or subtracted from if negative) the home team
+  mutate(home_beat_spread = home_score + spread > away_score) %>% 
+  mutate(i_pick_home = predicted_home_mov > -spread) %>% 
+  mutate(beat_spread = !xor(home_beat_spread, i_pick_home))
+```
+
+
+Does this get better vs the spread over time? Or deeper into seasons? Eh, not really...
+
+```{r}
+against_spread %>% group_by(season) %>% summarise(beat_spread_pct = mean(beat_spread)) %>% 
+  ggplot() +
+  geom_line(aes(x = season, y = beat_spread_pct)) +
+  labs(title = "Do I get better vs. spread over time?", y = "Win % over spread")
+
+against_spread %>%
+  group_by(week) %>%
+  summarise(vs_spread = mean(beat_spread)) %>%
+  ggplot() +
+  geom_line(aes(x = week, y = vs_spread)) +
+  ylim(c(0, 1)) +
+  labs(title = "vs. spread further into the season?", y = "Win % over spread")
+```
+
+Overall win %:
+
+```{r}
+# Don't get too excited, no train/test split
+against_spread %>% .[['beat_spread']] %>% mean()
+```
+
+# Explore
+
+```{r}
+against_spread %>% ggplot() + geom_point(aes(x = spread, y = predicted_home_mov, col = beat_spread))
+against_spread %>%
+  ggplot() + geom_density(aes(x = predicted_home_mov, col = beat_spread))
+against_spread %>%
+  ggplot() + geom_density(aes(x = spread, col = beat_spread))
+against_spread %>%
+  ggplot() + geom_density(aes(x = home_mov, col = beat_spread))
+```

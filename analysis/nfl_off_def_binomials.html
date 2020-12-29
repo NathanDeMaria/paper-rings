@@ -395,7 +395,8 @@ games &lt;- read_csv(&#39;../games_with_ratings.csv&#39;)</code></pre>
 ##   home_mov = col_double(),
 ##   home_score = col_double(),
 ##   away_score = col_double(),
-##   week = col_double()
+##   week = col_double(),
+##   season = col_double()
 ## )</code></pre>
 <pre class="r"><code>home_flat &lt;- games %&gt;%
   select(score = home_score,

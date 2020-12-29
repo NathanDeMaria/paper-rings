@@ -1,0 +1,82 @@
+---
+title: "glicko_vs_spread"
+output: html_document
+---
+
+```{r}
+library(tidyverse)
+
+# Umm...how did I make this NFL results csv?
+results <- read_csv('../../py-glicko/examples/nfl/nfl_results.csv')
+spreads <- read_csv('../../EndGame/py-endgame/nfl_spreads.csv')
+
+against_spread <- results %>%
+  inner_join(spreads, by = c('team' = 'home', 'opponent' = 'away', 'week', 'season')) %>% 
+  mutate(home_mov = team_score - opponent_score, favored_pct = win_prob - .5)
+```
+
+```{r}
+train_season <- 2012
+prob_to_spread <- lm(spread ~ poly(favored_pct, 3), data = against_spread %>% filter(season < train_season))
+summary(prob_to_spread)
+```
+
+
+```{r}
+win_probs <- seq(-.5, .5, by = .01)
+ggplot(tibble(win_probs, movs = -predict(prob_to_spread, newdata = tibble(favored_pct = win_probs)))) +
+  geom_line(aes(x = win_probs, y = movs)) +
+  labs(x = "win prob - 0.5", y = "Predicted home MOV")
+```
+
+```{r}
+against_spread <- against_spread %>%
+  mutate(predicted_home_mov = -predict(prob_to_spread, newdata = tibble(favored_pct = favored_pct))) %>% 
+  mutate(residual = home_mov - predicted_home_mov) %>% 
+  # Spread is the number of points given to (or subtracted from if negative) the home team
+  mutate(home_beat_spread = team_score + spread > opponent_score) %>% 
+  mutate(i_pick_home = predicted_home_mov > -spread) %>% 
+  mutate(beat_spread = !xor(home_beat_spread, i_pick_home))
+```
+
+Does this get better vs the spread over time? Or deeper into seasons? Eh, not really...
+
+```{r}
+against_spread %>% group_by(season) %>% summarise(beat_spread_pct = mean(beat_spread)) %>% 
+  ggplot() +
+  geom_line(aes(x = season, y = beat_spread_pct)) +
+  labs(title = "Do I get better vs. spread over time?", y = "Win % over spread")
+
+against_spread %>% filter(season >= train_season) %>%
+  group_by(week) %>%
+  summarise(vs_spread = mean(beat_spread)) %>%
+  ggplot() +
+  geom_line(aes(x = week, y = vs_spread)) +
+  ylim(c(0, 1)) +
+  labs(title = "vs. spread further into the season?", y = "Win % over spread")
+```
+
+Overall win %:
+
+```{r}
+against_spread %>% filter(season >= train_season) %>% .[['beat_spread']] %>% mean()
+```
+
+# Explore
+
+Check some different views. None are very interesting except the last one.
+This beats the spread fairly frequently in close games, loses in blowouts.
+That's interesting b/c other facets don't show similar problems - 
+games with predicted large MOVs (by the spread, or by my model)
+are still roughly even vs. the spread, it's just games that ended up being blowouts
+
+```{r}
+against_spread %>% ggplot() + geom_point(aes(x = spread, y = predicted_home_mov, col = beat_spread))
+against_spread %>%
+  ggplot() + geom_density(aes(x = predicted_home_mov, col = beat_spread))
+against_spread %>%
+  ggplot() + geom_density(aes(x = spread, col = beat_spread))
+against_spread %>%
+  filter(season >= train_season) %>%
+  ggplot() + geom_density(aes(x = home_mov, col = beat_spread))
+```
